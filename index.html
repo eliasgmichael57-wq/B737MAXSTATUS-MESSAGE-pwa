@@ -1,0 +1,1417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="manifest" href="manifest.json">
+
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js');
+  }
+</script>
+  <meta charset="UTF-8">
+  <title>Maintenance Message Lookup</title>
+  <style>
+.link-button {
+  display: inline-block;
+  padding: 0.5rem 1.2rem;
+  margin: 0.3rem 0;
+  font-size: 1rem;
+  font-weight: bold;
+  color: #fff;
+  text-decoration: none;
+  background: linear-gradient(to bottom, #87CEFA, #00BFFF); /* sky blue gradient */
+  border: 1px solid #006699;
+  border-radius: 6px;
+  box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+  transition: transform 0.1s ease-in-out;
+}
+.link-button:hover {
+  transform: translateY(-2px); /* lift effect */
+}
+
+    body {
+      font-family: Arial, sans-serif;
+      margin: 2rem;
+      background: #f4f4f4;
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 0.2rem;
+    }
+    .subtitle {
+      font-style: italic;
+      color: red; /* red text */
+      margin-bottom: 1.5rem;
+    }
+    .lookup-box {
+      margin-bottom: 1rem;
+      background: #e0f7fa; /* cool teal background */
+      padding: 1rem;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      position: relative;
+    }
+    label {
+      font-weight: bold;
+      color: #004d66;
+    }
+    input[type="text"] {
+      padding: 0.5rem;
+      font-size: 1rem;
+      width: 300px;
+      margin-left: 0.5rem;
+    }
+    ul.suggestions {
+      list-style: none;
+      padding: 0;
+      margin: 0.5rem 0 0 0;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      max-height: 150px;
+      overflow-y: auto;
+      position: absolute;
+      width: 300px;
+    }
+    ul.suggestions li {
+      padding: 0.5rem;
+      cursor: pointer;
+    }
+    ul.suggestions li:hover {
+      background: #e0f7fa;
+    }
+    button {
+      padding: 0.5rem 1.2rem;
+      font-size: 1rem;
+      margin-left: 0.5rem;
+      cursor: pointer;
+      background: linear-gradient(to bottom, #87CEFA, #00BFFF); /* sky blue gradient */
+      border: 1px solid #006699;
+      border-radius: 6px;
+      color: #fff;
+      font-weight: bold;
+      box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+      transition: transform 0.1s ease-in-out;
+    }
+    button:hover {
+      transform: translateY(-2px);
+    }
+    .result {
+      background: #fff;
+      padding: 1rem;
+      border-radius: 6px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .result h2 {
+      margin-top: 0;
+    }
+    .field {
+      margin: 0.25rem 0;
+    }
+    .field strong {
+      display: inline-block;
+      width: 120px;
+    }
+    a {
+      color: #0066cc;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <h1>Maintenance Message Lookup</h1>
+  <div class="subtitle">(FOR TRAINING PURPOSE ONLY)</div>
+
+  <div class="lookup-box">
+    <label for="msgInput">Enter Message:</label>
+    <input type="text" id="msgInput" placeholder="e.g. AFT CARGO LOADER RLY" onkeyup="showSuggestions(this.value)">
+    <button onclick="lookupMessage()">ENTER</button>
+    <ul id="suggestions" class="suggestions"></ul>
+  </div>
+
+  <div id="output" class="result"></div>
+
+  <script>
+    // Dataset from your table
+    const MESSAGES = [
+      {
+        message: "AFT CARGO LOADER RLY",
+        description: "PSEU system has detected a fault in the aft cargo loader.",
+        mel: "docs/50-21-01.pdf",
+        ifim: "images/52-70-00-810-818.png"
+      },
+      {
+        message: "AIR/GND SYS",
+        description: "PSEU system has detected a failure of the Air/Ground sensing system.",
+        mel: "NO MEL",
+        ifim: "images/32-09-00-810-869.png"
+      },
+      {
+        message: "ALTN NOSE STEERING",
+        description: "PSEU system has detected a failed alternate nose landing gear steering switch.",
+        mel: "NO MEL",
+        ifim: "images/32-50-00-810-801.png"
+      },
+      {
+        message: "APU DOOR",
+        description: "APU inlet door is not in commanded position.",
+        mel: "docs/49-15-01.pdf",
+        ifim: "images/49-10-00-810-809.png"
+      },
+      {
+        message: "APU GENERATOR",
+        description: "APU generator rotating diode is failed.",
+        mel: "docs/24-21-01.pdf",
+        ifim: "images/49-40-00-810-829.png"
+      },
+      {
+        message: "APU OIL QTY",
+        description: "APU oil quantity is below normal levels or sensing has failed.",
+        mel: "N/A",
+        ifim: "images/49-90-00-810-813.png"
+      },
+      {
+        message: "AUTOSLAT FAIL SMYD 1",
+        description: "SMYD 1 fault; failed control of the autoslat system.",
+        mel: "docs/27-83-01.pdf",
+        ifim: "images/27-80-00-810-802.png"
+      },
+      {
+        message: "AUTOSLAT FAIL SMYD 2",
+        description: "SMYD 2 fault; cannot command the autoslat system.",
+        mel: "docs/27-83-01.pdf",
+        ifim: "images/27-80-00-810-803.png"
+      },
+      {
+        message: "AUTOSLAT FAIL",
+        description: "Both SMYD 1 and 2 failed; system is rendered inoperative.",
+        mel: "NO MEL",
+        ifim: "images/27-80-00-810-801.png"
+      },
+{
+  message: "BLD CTRL BACKUP PROTECT L",
+  description: "ASC backup card protection function failure.",
+  mel: "docs/36-11-01-05.pdf",
+  ifim: "images/36-10-00-810-864.png"
+},
+{
+  message: "BLD CTRL BACKUP PROTECT R",
+  description: "ASC backup card protection function failure.",
+  mel: "docs/36-11-01-05.pdf",
+  ifim: "images/36-10-00-810-865.png"
+},
+{
+  message: "BLD CTRL CARD L – ENG DATA",
+  description: "Engine data (PS3, T3) not available to ASC when engine is ON.",
+  mel: "docs/36-11-01-06.pdf",
+  ifim: "images/36-10-00-810-866.png"
+},
+{
+  message: "BLD CTRL CARD R – ENG DATA",
+  description: "Engine data (PS3, T3) not available to ASC when engine is ON.",
+  mel: "docs/36-11-01-06.pdf",
+  ifim: "images/36-10-00-810-867.png"
+},
+{
+  message: "BLEED CTRL – ISO VALVE",
+  description: "IASC detected failure on isolation valve discrete input.",
+  mel: "docs/36-13-02.pdf",
+  ifim: "images/36-10-00-810-861.png"
+},
+{
+  message: "BLEED CTRL BACKUP L",
+  description: "Complete failure of the ASC backup card.",
+  mel: "docs/36-11-01-03.pdf",
+  ifim: "images/36-10-00-810-862.png"
+},
+{
+  message: "BLEED CTRL BACKUP R",
+  description: "Complete failure of the ASC backup card.",
+  mel: "docs/36-11-01-03.pdf",
+  ifim: "images/36-10-00-810-863.png"
+},
+{
+  message: "BLEED CTRL ICING INHIB L",
+  description: "ASC to Engine Anti-Ice (EAI) inhibit function failure.",
+  mel: "docs/36-11-01-02.pdf",
+  ifim: "images/36-10-00-810-843.png"
+},
+{
+  message: "BLEED CTRL ICING INHIB R",
+  description: "ASC to Engine Anti-Ice (EAI) inhibit function failure.",
+  mel: "docs/36-11-01-02.pdf",
+  ifim: "images/36-10-00-810-844.png"
+},
+{
+  message: "BLEED CTRL L – ASC HEALTH",
+  description: "IASC detected failure on the ASC controller health relay.",
+  mel: "docs/36-11-01-04.pdf",
+  ifim: "images/36-10-00-810-859.png"
+},
+{
+  message: "BLEED CTRL R – ASC HEALTH",
+  description: "IASC detected failure on the ASC controller health relay.",
+  mel: "docs/36-11-01-04.pdf",
+  ifim: "images/36-10-00-810-860.png"
+},
+{
+  message: "BLEED CTRL LIGHT OUTPUT L",
+  description: "P5-10 flight deck panel Bleed light is inoperative.",
+  mel: "docs/36-11-05.pdf",
+  ifim: "images/36-10-00-810-857.png"
+},
+{
+  message: "BLEED CTRL LIGHT OUTPUT R",
+  description: "P5-10 flight deck panel Bleed light is inoperative.",
+  mel: "docs/36-11-05.pdf",
+  ifim: "images/36-10-00-810-858.png"
+},
+{
+  message: "BLEED CTRL PRESS IND L",
+  description: "ASC analog output to P5-10 pressure gauge failed.",
+  mel: "docs/36-21-01.pdf",
+  ifim: "images/36-10-00-810-841.png"
+},
+{
+  message: "BLEED CTRL PRESS IND R",
+  description: "ASC analog output to P5-10 pressure gauge failed.",
+  mel: "docs/36-21-01.pdf",
+  ifim: "images/36-10-00-810-842.png"
+},
+{
+  message: "BLEED CTRL PRIMARY L",
+  description: "Primary ASC channel failed; control switched to backup.",
+  mel: "docs/36-11-01-01.pdf",
+  ifim: "images/36-10-00-810-839.png"
+},
+{
+  message: "BLEED CTRL PRIMARY R",
+  description: "Primary ASC channel failed; control switched to backup.",
+  mel: "docs/36-11-01-01.pdf",
+  ifim: "images/36-10-00-810-840.png"
+},
+{
+  message: "BLEED FAMV L",
+  description: "Fan Air Modulating Valve (FAMV) failure.",
+  mel: "docs/36-12-01-01.pdf",
+  ifim: "images/36-10-00-810-851.png"
+},
+{
+  message: "BLEED FAMV R",
+  description: "Fan Air Modulating Valve (FAMV) failure.",
+  mel: "docs/36-12-01-01.pdf",
+  ifim: "images/36-10-00-810-852.png"
+},
+{
+  message: "BLEED HPSOV CTRL L",
+  description: "HPSOV torque motor/driver fault (Valve in pneumatic mode).",
+  mel: "docs/36-11-04-02.pdf",
+  ifim: "images/36-10-00-810-849.png"
+},
+{
+  message: "BLEED HPSOV CTRL R",
+  description: "HPSOV torque motor/driver fault (Valve in pneumatic mode).",
+  mel: "docs/36-11-04-02.pdf",
+  ifim: "images/36-10-00-810-850.png"
+},
+{
+  message: "BLEED HPSOV L",
+  description: "HPSOV mechanically failed or erroneously driven.",
+  mel: "docs/36-11-04-01.pdf",
+  ifim: "images/36-10-00-810-847.png"
+},
+{
+  message: "BLEED HPSOV R",
+  description: "HPSOV mechanically failed or erroneously driven.",
+  mel: "docs/36-11-04-01.pdf",
+  ifim: "images/36-10-00-810-848.png"
+},
+{
+  message: "BLEED IASC SOFTWARE CONFIG",
+  description: "Incompatible Bleed IASC software configuration.",
+  mel: "Check Manual",
+  ifim: "images/36-10-00-810-814.png"
+},
+{
+  message: "BLEED PI SENSOR L",
+  description: "Loss of Intermediate Manifold (PI) sensor (electrical/drift/test).",
+  mel: "docs/36-11-02-02.pdf",
+  ifim: "images/36-10-00-810-855.png"
+},
+{
+  message: "BLEED PI SENSOR R",
+  description: "Loss of Intermediate Manifold (PI) sensor (electrical/drift/test).",
+  mel: "docs/36-11-02-02.pdf",
+  ifim: "images/36-10-00-810-856.png"
+},
+{
+  message: "BLEED PM SENSOR 2 L",
+  description: "Loss of PM2 sensor (wiring/sensing/drift/test).",
+  mel: "docs/36-11-02-01.pdf",
+  ifim: "images/36-10-00-810-853.png"
+},
+{
+  message: "BLEED PM SENSOR 2 R",
+  description: "Loss of PM2 sensor (wiring/sensing/drift/test).",
+  mel: "docs/36-11-02-01.pdf",
+  ifim: "images/36-10-00-810-854.png"
+},
+{
+  message: "BLEED PRSOV L",
+  description: "PRSOV failed open/closed or solenoid failure.",
+  mel: "docs/36-11-03.pdf",
+  ifim: "images/36-10-00-810-845.png"
+},
+{
+  message: "BLEED PRSOV R",
+  description: "PRSOV failed open/closed or solenoid failure.",
+  mel: "docs/36-11-03.pdf",
+  ifim: "images/36-10-00-810-846.png"
+},
+{
+  message: "BRAKE TEMP SYS",
+  description: "BTMS fault; partial or total loss of monitoring.",
+  mel: "docs/32-46-01.pdf",
+  ifim: "images/32-40-00-810-801.png"
+},
+{
+  message: "DISPLAY UNIT INTERFACE",
+  description: "DU internal fault, fiber optic failure, or A429 path failure.",
+  mel: "docs/31-62-01-01.pdf",
+  ifim: "images/31-60-00-810-811.png"
+},
+{
+  message: "DISPLAYS CONFIG DATA",
+  description: "MDS detects disagreement in NVM Aircraft Config Data.",
+  mel: "NO MEL",
+  ifim: "images/31-60-00-810-809.png"
+},
+{
+  message: "DISPLAYS SOFTWARE CONFIG",
+  description: "Incompatible software configuration detected.",
+  mel: "NO MEL",
+  ifim: "images/31-60-00-810-810.png"
+},
+{
+  message: "DOOR AFT CARGO",
+  description: "Fault in the aft cargo door indication system.",
+  mel: "docs/52-71-01-01.pdf",
+  ifim: "images/52-70-00-810-816.png"
+},
+{
+  message: "DOOR AFT ENTRY",
+  description: "Fault in the aft entry or service door indication system.",
+  mel: "docs/52-71-01-01.pdf",
+  ifim: "images/52-70-00-810-802.png"
+},
+{
+  message: "DOOR AFT SERVICE",
+  description: "Fault in the aft entry or service door indication system.",
+  mel: "docs/52-71-01-01.pdf",
+  ifim: "images/52-70-00-810-812.png"
+},
+{
+  message: "DOOR EE ACCESS",
+  description: "Fault in the Electronic Equipment (EE) access door indication.",
+  mel: "docs/52-71-01-02.pdf",
+  ifim: "images/52-70-00-810-819.png"
+},
+{
+  message: "DOOR EMER EXIT PRGM PINS",
+  description: "Invalid door programming pin setting; reporting unavailable.",
+  mel: "docs/52-71-02.pdf",
+  ifim: "images/52-70-00-810-814.png"
+},
+{
+  message: "DOOR EQUIP IND",
+  description: "Fault in the equipment door indication system.",
+  mel: "docs/52-71-01-02.pdf",
+  ifim: "images/52-70-00-810-813.png"
+},
+{
+  message: "DOOR FWD ACCESS",
+  description: "Fault in the forward equipment access door indication.",
+  mel: "docs/52-71-01-02.pdf",
+  ifim: "images/52-70-00-810-820.png"
+},
+{
+  message: "DOOR FWD CARGO",
+  description: "Fault in the forward cargo door indication system.",
+  mel: "docs/52-71-01-02.pdf",
+  ifim: "images/52-70-00-810-815.png"
+},
+{
+  message: "DOOR FWD ENTRY",
+  description: "Fault in the forward entry or service door indication system.",
+  mel: "docs/52-71-01-01.pdf",
+  ifim: "images/52-70-00-810-801.png"
+},
+{
+  message: "DOOR FWD SERVICE",
+  description: "Fault in the forward entry or service door indication system.",
+  mel: "docs/52-71-01-01.pdf",
+  ifim: "images/52-70-00-810-811.png"
+},
+{
+  message: "DOOR L OVERWING FLTLOCK",
+  description: "PSEU detects that the overwing flightlock is inoperative.",
+  mel: "docs/52-22-01.pdf",
+  ifim: "images/52-70-00-810-805.png"
+},
+{
+  message: "DOOR R OVERWING FLTLOCK",
+  description: "PSEU detects that the overwing flightlock is inoperative.",
+  mel: "docs/52-22-01.pdf",
+  ifim: "images/52-70-00-810-806.png"
+},
+{
+  message: "DOOR L OVERWING",
+  description: "Locked switch open in air or door lights inoperative.",
+  mel: "docs/52-71-01-04.pdf",
+  ifim: "images/52-70-00-810-803.png"
+},
+{
+  message: "DOOR R OVERWING",
+  description: "Locked switch open in air or door lights inoperative.",
+  mel: "docs/52-71-01-04.pdf",
+  ifim: "images/52-70-00-810-804.png"
+},
+{
+  message: "DPC 1 HOT BATTERY",
+  description: "Hot battery power is not available to the DPC.",
+  mel: "NO MEL",
+  ifim: "images/31-60-00-810-806.png"
+},
+{
+  message: "DPC 2 HOT BATTERY",
+  description: "Hot battery power is not available to the DPC.",
+  mel: "NO MEL",
+  ifim: "images/31-60-00-810-807.png"
+},
+{
+  message: "DPC 1",
+  description: "Hardware component failed or faulted within the DPC.",
+  mel: "NO MEL",
+  ifim: "images/31-60-00-810-804.png"
+},
+{
+  message: "DPC 2",
+  description: "Hardware component failed or faulted within the DPC.",
+  mel: "NO MEL",
+  ifim: "images/31-60-00-810-805.png"
+},
+{
+  message: "DPC CROSSTALK BUS",
+  description: "DPC Cross-Talk bus communication failure.",
+  mel: "NO MEL",
+  ifim: "images/31-60-00-810-808.png"
+},
+{
+  message: "ENG 1 EEC COOLING SYS",
+  description: "Failure of both EEC cooling system blowers (1 and 2).",
+  mel: "docs/75-23-01.pdf",
+  ifim: "images/G75-20-00-810-801.png"
+},
+{
+  message: "ENG 1 FUEL FILTER SENSOR",
+  description: "Differential pressure sensor failed (detects impending bypass).",
+  mel: "docs/73-34-01-02.pdf",
+  ifim: "images/G73-10-00-810-807.png"
+},
+{
+  message: "ENG 1 FUEL MAIN HX SENSOR",
+  description: "Sensor failure for the Fuel Cooled Oil Cooler (FCOC) heat exchanger.",
+  mel: "docs/73-34-01-01.pdf",
+  ifim: "images/G73-10-00-810-815.png"
+},
+{
+  message: "ENG 1 IGNITER L",
+  description: "Left igniter failure (no light, no power, or dual EEC relay fault).",
+  mel: "docs/74-00-01-01.pdf",
+  ifim: "images/G74-20-00-810-801.png"
+},
+{
+  message: "ENG 2 EEC COOLING SYS",
+  description: "EEC cooling system (Blower 1 and 2) failure.",
+  mel: "docs/75-23-01.pdf",
+  ifim: "images/G75-20-00-810-802.png"
+},
+{
+  message: "ENG 2 FUEL FILTER SENSOR",
+  description: "Impending bypass sensor for the fuel filter is failed.",
+  mel: "docs/73-34-01-02.pdf",
+  ifim: "images/G73-10-00-810-808.png"
+},
+{
+  message: "ENG 2 FUEL MAIN HX SENSOR",
+  description: "FCOC (Fuel Cooled Oil Cooler) impending bypass sensor failed.",
+  mel: "docs/73-34-01-01.pdf",
+  ifim: "images/G73-10-00-810-816.png"
+},
+{
+  message: "ENG 2 IGNITER L",
+  description: "Ignition failure (light failure, no power, or EEC relay fault).",
+  mel: "docs/74-00-01-01.pdf",
+  ifim: "images/G74-20-00-810-802.png"
+},
+{
+  message: "FLAP TE POSN DEGRADED",
+  description: "Trailing Edge flap position indication degraded.",
+  mel: "NO MEL",
+  ifim: "images/27-00-00-810-856.png"
+},
+{
+  message: "GEAR CONTROL",
+  description: "General PSEU fault in the landing gear control system.",
+  mel: "docs/32-31-02B.pdf",
+  ifim: "images/32-30-00-810-802.png"
+},
+{
+  message: "GROUND SPOILER CTRL",
+  description: "Failure of the Ground Spoiler Control Module (GSCM).",
+  mel: "NO MEL",
+  ifim: "images/27-60-00-810-812.png"
+},
+{
+  message: "PACK FLOW CTRL SENSOR L",
+  description: "Flow sensor unusable; opposite sensor data used if available.",
+  mel: "docs/21-51-04.pdf",
+  ifim: "images/21-50-00-810-807.png"
+},
+{
+  message: "PACK FLOW CTRL SENSOR R",
+  description: "Flow sensor unusable; opposite sensor data used if available.",
+  mel: "docs/21-51-04.pdf",
+  ifim: "images/21-50-00-810-808.png"
+},
+{
+  message: "PSEU FAIL",
+  description: "The PSEU system has detected a critical internal hardware fault.",
+  mel: "NO MEL",
+  ifim: "images/32-60-00-810-809.png"
+},
+{
+  message: "STALL WARNING SYS L",
+  description: "Loss of Captain’s stall warning (Stick Shaker) on Left SMYD.",
+  mel: "NO MEL",
+  ifim: "images/27-30-00-810-801.png"
+},
+{
+  message: "TIRE PRESS SYS",
+  description: "TPMS (Tire Pressure Monitoring System) has detected a fault.",
+  mel: "docs/32-49-01.pdf",
+  ifim: "images/32-40-00-810-802.png"
+},
+{
+  message: "TRIM AIR MOD VLV FWD CAB",
+  description: "Zone temperature loop inoperative due to Trim Air Valve (TAV) failure.",
+  mel: "docs/21-61-01.pdf",
+  ifim: "images/21-60-00-810-802.png"
+},
+{
+  message: "YAW DAMPER SYS",
+  description: "A fault in SMYD 1 or SMYD 2 has rendered the yaw damper inoperative.",
+  mel: "docs/22-11-2001.pdf",
+  ifim: "images/22-20-00-810-801.png"
+},
+{
+  message: "SPOILER CONTROL CHANNEL",
+  description: "SCE Power-Up test, NVM, or program pin fault affecting a lane.",
+  mel: "docs/27-61-01-01.pdf",
+  ifim: "images/27-60-00-810-803.png"
+},
+{
+  message: "SPOILER CONTROL SYSTEM",
+  description: "Loss of SCE processing integrity; Ground/Flight spoilers inop.",
+  mel: "NO MEL",
+  ifim: "images/27-60-00-810-802.png"
+},
+{
+  message: "SPOILER CTRL WHEEL XDCR",
+  description: "Failure of two or more F/O control wheel position transducers.",
+  mel: "NO MEL",
+  ifim: "images/27-60-00-810-806.png"
+},
+{
+  message: "SPOILER DESCENT SPEEDBRAKE",
+  description: "Failure of Emergency Descent Speedbrakes (EDS) control law.",
+  mel: "docs/27-61-03.pdf",
+  ifim: "images/27-60-00-810-805.png"
+},
+{
+  message: "SPOILER DIRECT LIFT CTRL",
+  description: "Failure of Direct Lift Control (DLC) due to insufficient inputs.",
+  mel: "NO MEL",
+  ifim: "images/27-60-00-810-804.png"
+},
+{
+  message: "SPOILER LOAD ALLEVIATION",
+  description: "Failure of Maneuver Load Alleviation (MLA) control law.",
+  mel: "docs/27-61-02.pdf",
+  ifim: "images/27-60-00-810-801.png"
+},
+{
+  message: "SPOILER PAIR 2/11",
+  description: "Inboard/Outboard spoiler pair 2 (Left) and 11 (Right) inoperative.",
+  mel: "docs/27-61-01.pdf",
+  ifim: "images/27-60-00-810-807.png"
+},
+{
+  message: "SPOILER PAIR 3/10",
+  description: "Inboard/Outboard spoiler pair 3 (Left) and 10 (Right) inoperative.",
+  mel: "docs/27-61-01.pdf",
+  ifim: "images/27-60-00-810-808.png"
+},
+{
+  message: "SPOILER PAIR 4/9",
+  description: "Inboard/Outboard spoiler pair 4 (Left) and 9 (Right) inoperative.",
+  mel: "docs/27-61-01.pdf",
+  ifim: "images/27-60-00-810-809.png"
+},
+{
+  message: "SPOILER PAIR 5/8",
+  description: "Inboard/Outboard spoiler pair 5 (Left) and 8 (Right) inoperative.",
+  mel: "NO MEL",
+  ifim: "images/27-60-00-810-810.png"
+},
+{
+  message: "STALL WARNING SYS L",
+  description: "Loss of Captain’s stall warning (Stick Shaker) on Left SMYD.",
+  mel: "NO MEL",
+  ifim: "images/27-30-00-810-801.png"
+},
+{
+  message: "STALL WARNING SYS R",
+  description: "Loss of First Officer’s stall warning (Stick Shaker) on Right SMYD.",
+  mel: "NO MEL",
+  ifim: "images/27-30-00-810-802.png"
+},
+{
+  message: "TAKEOFF CONFIG",
+  description: "PSEU detected failure in takeoff configuration sensing system.",
+  mel: "NO MEL",
+  ifim: "images/31-50-00-810-807.png"
+},
+{
+  message: "TAKEOFF WARN FAIL",
+  description: "PSEU detected failure of the takeoff configuration warning system.",
+  mel: "NO MEL",
+  ifim: "images/31-50-00-810-806.png"
+},
+{
+  message: "TAT DISAGREE",
+  description: "FMC detected an error in the ADIRU’s Total Air Temperature Sensor.",
+  mel: "NO MEL",
+  ifim: "images/34-20-00-810-807.png"
+},
+{
+  message: "TIRE PRESS SYS",
+  description: "TPMS (Tire Pressure Monitoring System) has detected a fault.",
+  mel: "docs/32-49-01.pdf",
+  ifim: "images/32-40-00-810-802.png"
+},
+{
+  message: "TRIM AIR MOD VLV AFT CAB",
+  description: "Zone temperature loop inoperative due to Trim Air Valve (TAV) failure.",
+  mel: "docs/21-61-01.pdf",
+  ifim: "images/21-60-00-810-803.png"
+},
+{
+  message: "TRIM AIR MOD VLV CONT CAB",
+  description: "Zone temperature loop inoperative due to Trim Air Valve (TAV) failure.",
+  mel: "docs/21-61-01.pdf",
+  ifim: "images/21-60-00-810-801.png"
+},
+{
+  message: "TRIM AIR MOD VLV FWD CAB",
+  description: "Zone temperature loop inoperative due to Trim Air Valve (TAV) failure.",
+  mel: "docs/21-61-01.pdf",
+  ifim: "images/21-60-00-810-802.png"
+},
+{
+  message: "YAW DAMPER SYS",
+  description: "A fault in SMYD 1 or SMYD 2 has rendered the yaw damper inoperative.",
+  mel: "docs/22-11-2001.pdf",
+  ifim: "images/22-20-00-810-801.png"
+},
+{
+  message: "PSEU AIR/GND OVRD ENABLE",
+  description: "The PSEU system Air/Ground override is currently active.",
+  mel: "N/A",
+  ifim: "images/32-60-00-810-812.png"
+},
+{
+  message: "PSEU COMM",
+  description: "DPC detected complete loss of ARINC 429 communication from the PSEU.",
+  mel: "NO MEL",
+  ifim: "images/32-60-00-810-811.png"
+},
+{
+  message: "PSEU FAIL",
+  description: "The PSEU system has detected a critical internal hardware fault.",
+  mel: "NO MEL",
+  ifim: "images/32-60-00-810-809.png"
+},
+{
+  message: "PSEU POWER",
+  description: "Loss of one of the 28VDC power sources (Ground Service or Battery Bus).",
+  mel: "NO MEL",
+  ifim: "images/32-60-00-810-810.png"
+},
+{
+  message: "REMOTE LIGHT SENSOR",
+  description: "Left and right remote light sensors failed while DUs are powered.",
+  mel: "docs/31-62-02.pdf",
+  ifim: "images/31-60-00-810-812.png"
+},
+{
+  message: "SPEEDBRAKE LEVER XDCR",
+  description: "Failure of two or more speedbrake lever position transducers.",
+  mel: "NO MEL",
+  ifim: "images/27-60-00-810-811.png"
+},
+{
+  message: "SPOILER CONTROL CHANNEL",
+  description: "SCE Power-Up test, NVM, or program pin fault affecting a lane.",
+  mel: "docs/27-61-01-01.pdf",
+  ifim: "images/27-60-00-810-803.png"
+},
+{
+  message: "SPOILER CONTROL SYSTEM",
+  description: "Loss of SCE processing integrity; Ground/Flight spoilers inop.",
+  mel: "NO MEL",
+  ifim: "images/27-60-00-810-802.png"
+},
+{
+  message: "SPOILER CTRL WHEEL XDCR",
+  description: "Failure of two or more F/O control wheel position transducers.",
+  mel: "NO MEL",
+  ifim: "images/27-60-00-810-806.png"
+},
+{
+  message: "SPOILER DESCENT SPEEDBRAKE",
+  description: "Failure of Emergency Descent Speedbrakes (EDS) control law.",
+  mel: "docs/27-61-03.pdf",
+  ifim: "images/27-60-00-810-805.png"
+},
+{
+  message: "SPOILER DIRECT LIFT CTRL",
+  description: "Failure of Direct Lift Control (DLC) due to insufficient inputs.",
+  mel: "NO MEL",
+  ifim: "images/27-60-00-810-804.png"
+},
+{
+  message: "SPOILER LOAD ALLEVIATION",
+  description: "Failure of Maneuver Load Alleviation (MLA) control law.",
+  mel: "docs/27-61-02.pdf",
+  ifim: "images/27-60-00-810-801.png"
+},
+{
+  message: "STALL WARNING SYS R",
+  description: "Loss of First Officer’s stall warning (Stick Shaker) on Right SMYD.",
+  mel: "NO MEL",
+  ifim: "images/27-30-00-810-802.png"
+},
+{
+  message: "TAKEOFF CONFIG",
+  description: "PSEU detected failure in takeoff configuration sensing system.",
+  mel: "NO MEL",
+  ifim: "images/31-50-00-810-807.png"
+},
+{
+  message: "TAKEOFF WARN FAIL",
+  description: "PSEU detected failure of the takeoff configuration warning system.",
+  mel: "NO MEL",
+  ifim: "images/31-50-00-810-806.png"
+},
+{
+  message: "TAT DISAGREE",
+  description: "FMC detected an error in the ADIRU’s Total Air Temperature Sensor.",
+  mel: "NO MEL",
+  ifim: "images/34-20-00-810-807.png"
+},
+{
+  message: "TRIM AIR MOD VLV AFT CAB",
+  description: "Zone temperature loop inoperative due to Trim Air Valve (TAV) failure.",
+  mel: "docs/21-61-01.pdf",
+  ifim: "images/21-60-00-810-803.png"
+},
+{
+  message: "TRIM AIR MOD VLV CONT CAB",
+  description: "Zone temperature loop inoperative due to Trim Air Valve (TAV) failure.",
+  mel: "docs/21-61-01.pdf",
+  ifim: "images/21-60-00-810-801.png"
+},
+{
+  message: "TRIM AIR MOD VLV FWD CAB",
+  description: "Zone temperature loop inoperative due to Trim Air Valve (TAV) failure.",
+  mel: "docs/21-61-01.pdf",
+  ifim: "images/21-60-00-810-802.png"
+},
+{
+  message: "YAW DAMPER SYS",
+  description: "A fault in SMYD 1 or SMYD 2 has rendered the yaw damper inoperative.",
+  mel: "docs/22-11-2001.pdf",
+  ifim: "images/22-20-00-810-801.png"
+},
+{
+  message: "MAINTENANCE ENABLE",
+  description: "Ground test maintenance switch is not in the normal position.",
+  mel: "N/A",
+  ifim: "images/31-60-00-810-813.png"
+},
+{
+  message: "MLG L SENSOR",
+  description: "PSEU detected a failure of the left or right main gear sensors.",
+  mel: "NO MEL",
+  ifim: "images/32-60-00-810-813.png"
+},
+{
+  message: "MLG R SENSOR",
+  description: "PSEU detected a failure of the left or right main gear sensors.",
+  mel: "NO MEL",
+  ifim: "images/32-60-00-810-814.png"
+},
+{
+  message: "NLG SENSOR",
+  description: "PSEU detected a failure of the nose landing gear locked/down sensors.",
+  mel: "NO MEL",
+  ifim: "images/32-60-00-810-815.png"
+},
+{
+  message: "PACK FLOW CTRL VALVE L",
+  description: "FCV failed open or closed limit switch failed.",
+  mel: "docs/21-51-02.pdf",
+  ifim: "images/21-50-00-810-813.png"
+},
+{
+  message: "PACK FLOW CTRL VALVE R",
+  description: "FCV failed open or closed limit switch failed.",
+  mel: "docs/21-51-02.pdf",
+  ifim: "images/21-50-00-810-814.png"
+},
+{
+  message: "PACK FLOW PRIMARY L",
+  description: "Valve, driver, or controller fault; electronic flow control inop.",
+  mel: "docs/21-51-02-01.pdf",
+  ifim: "images/21-50-00-810-809.png"
+},
+{
+  message: "PACK FLOW PRIMARY R",
+  description: "Valve, driver, or controller fault; electronic flow control inop.",
+  mel: "docs/21-51-02-01.pdf",
+  ifim: "images/21-50-00-810-810.png"
+},
+{
+  message: "PACK IASC COMM L",
+  description: "Loss of comms between IASC (PFTC) and DPCs on primary control.",
+  mel: "docs/21-51-08.pdf",
+  ifim: "images/21-50-00-810-803.png"
+},
+{
+  message: "PACK IASC COMM R",
+  description: "Loss of comms between IASC (PFTC) and DPCs on primary control.",
+  mel: "docs/21-51-08.pdf",
+  ifim: "images/21-50-00-810-804.png"
+},
+{
+  message: "PACK IASC SOFT CONFIG",
+  description: "Incompatible Pack IASC software configuration detected.",
+  mel: "Check Manual",
+  ifim: "images/21-51-00-810-881.png"
+},
+{
+  message: "PACK RAM AIR SYSTEM L",
+  description: "System inop due to Smart Ram Air Door Actuator (SRADA) failure.",
+  mel: "docs/21-51-09.pdf",
+  ifim: "images/21-50-00-810-811.png"
+},
+{
+  message: "PACK RAM AIR SYSTEM R",
+  description: "System inop due to Smart Ram Air Door Actuator (SRADA) failure.",
+  mel: "docs/21-51-09.pdf",
+  ifim: "images/21-50-00-810-812.png"
+},
+{
+  message: "PACK TEMP CTRL PRIMARY L",
+  description: "TCV (Temperature Control Valve) or controller driver fault; temp control inop.",
+  mel: "docs/21-51-05.pdf",
+  ifim: "images/21-50-00-810-805.png"
+},
+{
+  message: "PACK TEMP CTRL PRIMARY R",
+  description: "TCV (Temperature Control Valve) or controller driver fault; temp control inop.",
+  mel: "docs/21-51-05.pdf",
+  ifim: "images/21-50-00-810-806.png"
+},
+{
+  message: "BLD CTRL BACKUP PROTECT L",
+  description: "ASC backup card protection function failure.",
+  mel: "docs/36-11-01-05.pdf",
+  ifim: "images/36-10-00-810-864.png"
+},
+{
+  message: "BLD CTRL BACKUP PROTECT R",
+  description: "ASC backup card protection function failure.",
+  mel: "docs/36-11-01-05.pdf",
+  ifim: "images/36-10-00-810-865.png"
+},
+{
+  message: "BLD CTRL CARD L – ENG DATA",
+  description: "Engine data (PS3, T3) not available to ASC when engine is ON.",
+  mel: "docs/36-11-01-06.pdf",
+  ifim: "images/36-10-00-810-866.png"
+},
+{
+  message: "BLD CTRL CARD R – ENG DATA",
+  description: "Engine data (PS3, T3) not available to ASC when engine is ON.",
+  mel: "docs/36-11-01-06.pdf",
+  ifim: "images/36-10-00-810-867.png"
+},
+{
+  message: "ENG 1 BAI/SBV VALVE",
+  description: "Booster Anti-Ice / Start Bleed Valve position disagree, torque motor failure, or feedback signal invalid.",
+  mel: "NO MEL",
+  ifim: "images/G75-10-00-810-802.png"
+},
+{
+  message: "ENG 1 CONTROL",
+  description: "EEC in 'No Dispatch' configuration; limited control parameters and operational capability.",
+  mel: "NO MEL",
+  ifim: "images/G73-10-00-810-857.png"
+},
+{
+  message: "ENG 1 EEC COOLING SYS",
+  description: "Failure of both EEC cooling system blowers (1 and 2).",
+  mel: "docs/75-23-01.pdf",
+  ifim: "images/G75-20-00-810-801.png"
+},
+{
+  message: "ENG 1 EEC OVERHEAT",
+  description: "EEC Channels A and B internal temperatures exceed operating limits.",
+  mel: "NO MEL",
+  ifim: "images/G73-20-00-810-859.png"
+},
+{
+  message: "ENG 1 FAN COMP OVHT SENSOR",
+  description: "Failure of the duct leak temperature sensors detected by the EEC.",
+  mel: "NO MEL",
+  ifim: "images/G73-20-00-810-869.png"
+},
+{
+  message: "ENG 1 FAN COMP OVHT",
+  description: "EEC detected an actual overheat condition in the fan compartment.",
+  mel: "NO MEL",
+  ifim: "images/G73-20-00-810-867.png"
+},
+{
+  message: "ENG 1 FUEL FILTER SENSOR",
+  description: "Differential pressure sensor failed (electronic impedance bypass).",
+  mel: "docs/73-34-01-02.pdf",
+  ifim: "images/G73-20-00-810-807.png"
+},
+{
+  message: "ENG 1 FUEL FILTER",
+  description: "Differential pressure indicates an impending filter blockage.",
+  mel: "NO MEL",
+  ifim: "images/G73-20-00-810-805.png"
+},
+{
+  message: "ENG 1 FUEL MAIN HX SENSOR",
+  description: "Sensor failure for the Fuel Cooled Oil Cooler (FCOC) heat exchanger.",
+  mel: "docs/73-34-01-01.pdf",
+  ifim: "images/G73-20-00-810-815.png"
+},
+{
+  message: "ENG 1 FUEL MAIN HX",
+  description: "Actual FCOC heat exchanger bypass condition detected.",
+  mel: "NO MEL",
+  ifim: "images/G73-20-00-810-813.png"
+},
+{
+  message: "ENG 1 FUEL VALVE",
+  description: "Fuel valve opened/closed, sensor failure on both channels, or torque motor fault.",
+  mel: "docs/73-34-01-03.pdf",
+  ifim: "images/G73-20-00-810-863.png"
+},
+{
+  message: "ENG 1 FUEL STRAINER SENSOR",
+  description: "Differential pressure sensor for the fuel strainer is failed.",
+  mel: "docs/73-11-01.pdf",
+  ifim: "images/G73-20-00-810-811.png"
+},
+{
+  message: "ENG 1 FUEL STRAINER",
+  description: "Actual or impending bypass of the engine fuel strainer.",
+  mel: "NO MEL",
+  ifim: "images/G73-20-00-810-809.png"
+},
+{
+  message: "ENG 1 HPTACC VALVE",
+  description: "High Pressure Turbine Active Clearance Control valve sensor failure.",
+  mel: "docs/75-24-01-01.pdf",
+  ifim: "images/G75-20-00-810-805.png"
+},
+{
+  message: "ENG 1 IGNITER L",
+  description: "Left igniter failure (no light, no power, or EEC fault detected).",
+  mel: "docs/74-00-01-01.pdf",
+  ifim: "images/G74-00-00-810-801.png"
+},
+{
+  message: "ENG 1 IGNITER R",
+  description: "Right igniter failure (no light, no power, or EEC fault detected).",
+  mel: "docs/74-00-01-02.pdf",
+  ifim: "images/G74-00-00-810-803.png"
+},
+{
+  message: "ENG 1 LPTACC VALVE",
+  description: "Low Pressure Turbine Active Clearance Control valve or sensor failure.",
+  mel: "docs/75-24-01-02.pdf",
+  ifim: "images/G75-20-00-810-807.png"
+},
+{
+  message: "ENG 1 OIL DEBRIS SENSOR",
+  description: "Engine oil chip detector sensor failed.",
+  mel: "docs/79-21-01-01.pdf",
+  ifim: "images/G79-20-00-810-803.png"
+},
+{
+  message: "ENG 1 OIL DEBRIS",
+  description: "Metal chips exceed thresholds; indicates potential bearing failure.",
+  mel: "docs/79-21-01.pdf",
+  ifim: "images/G79-20-00-810-805.png"
+},
+{
+  message: "ENG 1 OIL PRESS SENSOR",
+  description: "Differential pressure sensor for the engine oil filter is failed.",
+  mel: "docs/79-35-01.pdf",
+  ifim: "images/G79-20-00-810-801.png"
+},
+{
+  message: "ENG 1 OIL TEMP SENSOR",
+  description: "Oil pressure sensor failed; left deck pressure displayed.",
+  mel: "NO MEL",
+  ifim: "images/G79-20-00-810-815.png"
+},
+{
+  message: "ENG 1 OVERSPEED PROTECT",
+  description: "EOS / TCMA protection system activated.",
+  mel: "NO MEL",
+  ifim: "images/G73-10-00-810-817.png"
+},
+{
+  message: "ENG 1 PSS",
+  description: "Pressure Subsystem (PSS) internal temperature limit exceeded.",
+  mel: "NO MEL",
+  ifim: "images/G73-10-00-810-861.png"
+},
+{
+  message: "ENG 1 REVERSER",
+  description: "Thrust reverser deployment failure.",
+  mel: "docs/78-31-01.pdf",
+  ifim: "images/G78-30-00-810-365.png"
+},
+{
+  message: "ENG 1 TBV",
+  description: "Thrust Bleed Valve (TBV) failed or sensor/torque motor fault.",
+  mel: "NO MEL",
+  ifim: "images/G75-30-00-810-801.png"
+},
+{
+  message: "ENG 1 VIBRATION MONITOR",
+  description: "Vibration monitoring function failed; loss of display.",
+  mel: "docs/77-31-01.pdf",
+  ifim: "images/G77-30-00-810-801.png"
+},
+{
+  message: "ENG 2 BAI/SBV VALVE",
+  description: "Booster Anti-Ice / Start Bleed Valve fault or signal invalid.",
+  mel: "NO MEL",
+  ifim: "images/G75-10-00-810-803.png"
+},
+{
+  message: "ENG 2 CONTROL",
+  description: "EEC is in a 'No Dispatch' configuration.",
+  mel: "NO MEL",
+  ifim: "images/G75-20-00-810-858.png"
+},
+{
+  message: "ENG 2 EEC COOLING SYS",
+  description: "EEC cooling system (Blower 1 and 2) failure.",
+  mel: "docs/75-23-01.pdf",
+  ifim: "images/G75-20-00-810-802.png"
+},
+{
+  message: "ENG 2 EEC OVERHEAT",
+  description: "EEC internal temperatures exceed operating limits.",
+  mel: "NO MEL",
+  ifim: "images/G75-20-00-810-860.png"
+},
+{
+  message: "ENG 2 FAN COMP OVHT SENSOR",
+  description: "Failure of the duct leak temperature sensors.",
+  mel: "NO MEL",
+  ifim: "images/G73-20-00-810-870.png"
+},
+{
+  message: "ENG 2 FAN COMP OVHT",
+  description: "EEC has detected an actual fan compartment overheat.",
+  mel: "docs/73-34-01-02.pdf",
+  ifim: "images/G73-20-00-810-868.png"
+},
+{
+  message: "ENG 2 FUEL FILTER SENSOR",
+  description: "Impending bypass sensor for the fuel filter is failed.",
+  mel: "NO MEL",
+  ifim: "images/G73-20-00-810-808.png"
+},
+{
+  message: "ENG 2 FUEL FILTER",
+  description: "Actual or impending fuel filter bypass condition.",
+  mel: "NO MEL",
+  ifim: "images/G73-20-00-810-806.png"
+},
+{
+  message: "ENG 2 FUEL MAIN HX SENSOR",
+  description: "FCCOC (Fuel Cooled Oil Cooler) impending bypass sensor failed.",
+  mel: "docs/73-34-01-02.pdf",
+  ifim: "images/G73-20-00-810-816.png"
+},
+{
+  message: "ENG 2 FUEL MAIN HX",
+  description: "Actual FCCOC heat exchanger bypass condition detected.",
+  mel: "NO MEL",
+  ifim: "images/G73-20-00-810-814.png"
+},
+{
+  message: "ENG 2 FUEL FILTER SENSOR",
+  description: "Impending bypass sensor for the fuel filter is failed.",
+  mel: "docs/73-34-01-02.pdf",
+  ifim: "images/G73-10-00-810-808.png"
+},
+{
+  message: "ENG 1 PSS OVERHEAT",
+  description: "Pressure Subsystem (PSS) internal temperature limit exceeded.",
+  mel: "NO MEL",
+  ifim: "images/G73-20-00-810-865.png"
+},
+{
+  message: "ENG 1 OIL FILTER SENSOR",
+  description: "Differential pressure sensor for the engine oil filter is failed.",
+  mel: "docs/79-35-01.pdf",
+  ifim: "images/G79-20-00-810-801.png"
+},
+{
+  message: "ENG 2 FUEL SPLIT VALVE",
+  description: "PWM failed (open/closed), sensor fault, or signal invalid.",
+  mel: "NO MEL",
+  ifim: "images/G73-20-00-810-864.png"
+},
+{
+  message: "ENG 1 FUEL SPLIT VALVE",
+  description: "PMV failed open/closed, sensor failure in both channels, or torque motor fault.",
+  mel: "NO MEL",
+  ifim: "images/G73-20-00-810-863.png"
+},
+{
+  message: "ENG 2 FUEL STRAINER SENSOR",
+  description: "Impending bypass sensor for fuel strainer failed.",
+  mel: "docs/73-11-01.pdf",
+  ifim: "images/G73-20-00-810-812.png"
+},
+{
+  message: "ENG 2 FUEL STRAINER",
+  description: "Actual or impending fuel strainer bypass condition.",
+  mel: "NO MEL",
+  ifim: "images/G73-20-00-810-810.png"
+},
+{
+  message: "ENG 2 HPTACC VALVE",
+  description: "High Pressure Turbine Active Clearance Control Valve/Sensor fault.",
+  mel: "docs/75-24-01-01.pdf",
+  ifim: "images/G75-20-00-810-806.png"
+},
+{
+  message: "ENG 2 IGNITER L",
+  description: "Ignition failure (light failure, no power, or EEC relay fault).",
+  mel: "docs/74-00-01-01.pdf",
+  ifim: "images/G74-00-00-810-802.png"
+},
+{
+  message: "ENG 2 IGNITER R",
+  description: "Ignition failure (light failure, no power, or EEC relay fault).",
+  mel: "docs/74-00-01-02.pdf",
+  ifim: "images/G74-00-00-810-802.png"
+},
+{
+  message: "ENG 2 LPTACC VALVE",
+  description: "Low Pressure Turbine Active Clearance Control Valve/Sensor fault.",
+  mel: "NO MEL",
+  ifim: "images/G75-20-00-810-804.png"
+},
+{
+  message: "ENG 2 OIL DEBRIS SENSOR",
+  description: "Oil chip detector sensor failed.",
+  mel: "docs/79-21-01-01.pdf",
+  ifim: "images/G79-20-00-810-804.png"
+},
+{
+  message: "ENG 2 OIL DEBRIS",
+  description: "Metal chips exceed thresholds (potential bearing problem).",
+  mel: "docs/79-21-01.pdf",
+  ifim: "images/G79-20-00-810-806.png"
+},
+{
+  message: "ENG 2 OIL PRESS SENSOR",
+  description: "Sensor failure; loss of engine oil pressure flight deck display.",
+  mel: "docs/79-35-01.pdf",
+  ifim: "images/G79-30-00-810-802.png"
+},
+{
+  message: "ENG 2 OIL TEMP SENSOR",
+  description: "Sensor failure; loss of engine oil temperature flight deck display.",
+  mel: "NO MEL",
+  ifim: "images/G79-30-00-810-816.png"
+},
+{
+  message: "ENG 2 OVERSPEED PROTECT",
+  description: "EOS/TCMA protection system test failure or not performed.",
+  mel: "NO MEL",
+  ifim: "images/G73-20-00-810-818.png"
+},
+{
+  message: "ENG 2 PSS OVERHEAT",
+  description: "Pressure Subsystem (PSS) internal temperature limit exceeded.",
+  mel: "NO MEL",
+  ifim: "images/G73-20-00-810-862.png"
+},
+{
+  message: "ENG 2 REVERSER",
+  description: "Thrust reverser anomaly; safing or position sensor fault.",
+  mel: "docs/78-31-01.pdf",
+  ifim: "images/G73-30-00-810-866.png"
+},
+{
+  message: "ENG 2 TBV",
+  description: "Transient Bleed Valve (TBV) failed or torque motor/sensor fault.",
+  mel: "NO MEL",
+  ifim: "images/G75-30-00-810-802.png"
+},
+{
+  message: "ENG 2 VIBRATION MONITOR",
+  description: "Vibration monitoring failed; loss of flight deck display.",
+  mel: "docs/77-31-01.pdf",
+  ifim: "images/G77-30-00-810-802.png"
+},
+{
+  message: "GEAR CONTROL 1",
+  description: "PSEU detected fault in landing gear control system 1 or 2.",
+  mel: "docs/32-31-02A.pdf",
+  ifim: "images/32-30-00-810-803.png"
+},
+{
+  message: "GEAR CONTROL 2",
+  description: "PSEU detected fault in landing gear control system 1 or 2.",
+  mel: "docs/32-31-02A.pdf",
+  ifim: "images/32-30-00-810-804.png"
+},
+{
+  message: "GEAR IND",
+  description: "Inoperative flight deck landing gear indication light.",
+  mel: "NO MEL",
+  ifim: "images/32-60-00-810-802.png"
+},
+{
+  message: "GEAR LEVER LATCH",
+  description: "Failure of the flight deck gear lever latch solenoid coil.",
+  mel: "NO MEL",
+  ifim: "images/32-60-00-810-805.png"
+},
+{
+  message: "GEAR LEVER SW",
+  description: "Signal disagreement that does not prevent gear operation.",
+  mel: "docs/32-31-03.pdf",
+  ifim: "images/32-60-00-810-803.png"
+},
+{
+  message: "GEAR LEVER",
+  description: "Signal disagreement that prevents normal gear operation.",
+  mel: "NO MEL",
+  ifim: "images/32-60-00-810-804.png"
+},
+{
+  message: "GEAR WARN ALTIMETER",
+  description: "Configuration warning fault related to the altimeter.",
+  mel: "NO MEL",
+  ifim: "images/32-60-00-810-808.png"
+},
+{
+  message: "GEAR WARN SYS",
+  description: "Complete failure of the landing gear configuration warning system.",
+  mel: "NO MEL",
+  ifim: "images/32-60-00-810-806.png"
+},
+{
+  message: "GEAR WARN THROTTLE SW",
+  description: "Fault in the throttle thrust resolver angle switch pack.",
+  mel: "NO MEL",
+  ifim: "images/32-60-00-810-807.png"
+},
+{
+  message: "GEAR XFR VALVE CTRL",
+  description: "Failure of the landing gear transfer valve circuit.",
+  mel: "NO MEL",
+  ifim: "images/32-30-00-810-805.png"
+},
+];
+
+    function showSuggestions(input) {
+      const list = document.getElementById('suggestions');
+      list.innerHTML = "";
+      if (!input) return;
+
+      const matches = MESSAGES.filter(item => item.message.includes(input.toUpperCase()));
+      matches.forEach(item => {
+        const li = document.createElement('li');
+        li.textContent = item.message;
+        li.onclick = () => {
+          document.getElementById('msgInput').value = item.message;
+          list.innerHTML = "";
+          lookupMessage();
+        };
+        list.appendChild(li);
+      });
+    }
+
+    function lookupMessage() {
+  const input = document.getElementById('msgInput').value.trim().toUpperCase();
+  const entry = MESSAGES.find(item => item.message === input);
+
+  const output = document.getElementById('output');
+  if (entry) {
+    // MEL clickable only if valid
+    const melDisplay = (entry.mel && entry.mel !== "NO MEL" && entry.mel !== "N/A" && entry.mel !== "Check Manual")
+      ? `<a href="${entry.mel}" target="_blank" class="link-button">MEL: ${entry.mel.replace('docs/','')}</a>`
+      : `<div class="field"><strong>MEL:</strong> ${entry.mel}</div>`;
+
+    // IFIM always clickable
+    const ifimDisplay = `<a href="${entry.ifim}" target="_blank" class="link-button">IFIM TASK ${entry.ifim.replace('images/','').replace('.png','')}</a>`;
+
+    output.innerHTML = `
+      <div class="field"><strong>Message:</strong> ${entry.message}</div>
+      <div class="field"><strong>Description:</strong> ${entry.description}</div>
+      ${melDisplay}<br>
+      ${ifimDisplay}
+    `;
+  } else {
+    output.innerHTML = `<p>No entry found for "${input}".</p>`;
+  }
+}
+
+  </script>
+</body>
+</html>
