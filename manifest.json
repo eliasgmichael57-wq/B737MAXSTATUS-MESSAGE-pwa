@@ -1,18 +1,19 @@
 {
-  "name": "B737 MAX Status Lookup",
-  "short_name": "MAXStatus",
-  "start_url": "./index.html",
+  "name": "B737 MAX Status Messages",
+  "short_name": "MAX Status",
+  "description": "Lookup tool for Boeing 737 MAX status message panels with offline support.",
+  "start_url": "index.html",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#003366",
   "icons": [
     {
-      "src": "images/icon-192.png",
+      "src": "icon-192.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "images/icon-512.png",
+      "src": "icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
     }
